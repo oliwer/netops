@@ -80,7 +80,7 @@ show_ops() {
 
 run_op() {
 	local op_name="$1" caller=${2:-unset}
-	local op_id targets target dep code
+	local op_id targets target dep code jobs="" job error=0
 
 	info "$op_name" "starting"
 
@@ -121,11 +121,20 @@ run_op() {
 			info "$op_name" ssh $target ${code}
 		else
 			ssh $target ${code} &
-			((mono == 0)) || wait
+			if ((mono == 1)); then
+				wait $! || die "op $op_name failed"
+			else
+				jobs="$jobs $!"
+			fi
 		fi
 	done
 
-	wait
+	if ((mono == 0)); then
+		for job in "$jobs"; do
+			wait $job || error=1
+		done
+		((error == 0)) || die "op $op_name failed"
+	fi
 
 	info "$op_name" "success"
 }
