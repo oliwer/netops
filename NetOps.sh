@@ -102,7 +102,7 @@ run_op() {
 	fi
 
 	# Make sure each target is uniq
-	targets=$(tr ' ' '\n' <<< ${targets} | sort -u | tr '\n' ' ')
+	targets=$(tr ' ' '\n' <<< ${targets} | sort -u)
 
 	# Execute dependencies
 	for dep in ${ops_needs[$op_id]:-unset}; do
@@ -131,7 +131,7 @@ run_op() {
 		fi
 
 		if ((debug == 1)); then
-			info "$op_name" ssh $target ${code}
+			info "$op_name" ssh $target "$code"
 		else
 			(echo "$code" | ssh -T $target '${SHELL:-/bin/sh}') &
 			if ((mono == 1)); then
