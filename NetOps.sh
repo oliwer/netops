@@ -79,13 +79,30 @@ show_ops() {
 }
 
 run_op() {
-	local op_name="$1" caller=${2:-unset}
+	local op_name="$1" caller=${2:-unset} caller_deps=${3:-unset}
 	local op_id targets target dep code jobs="" job error=0
 
 	info "$op_name" "starting"
 
 	# Get the requested operation id
 	op_id=$(find_id "$op_name")
+
+	# Compute on which target to run this op
+	# A dependency can inherit its targets from its calling op
+	targets=${ops_targets[$op_id]:-unset}
+
+	# If targets is unset, try to inherit them
+	if [ "$targets" = "unset" ] && [ "$caller_deps" != "unset" ]; then
+		targets="$caller_deps"
+	fi
+
+	# Fallback to localhost
+	if [ "$targets" = "unset" ]; then
+		targets=localhost
+	fi
+
+	# Make sure each target is uniq
+	targets=$(tr ' ' '\n' <<< ${targets} | sort -u | tr '\n' ' ')
 
 	# Execute dependencies
 	for dep in ${ops_needs[$op_id]:-unset}; do
@@ -102,14 +119,10 @@ run_op() {
 			    "between $caller and $op_name"
 		fi
 
-		run_op "$dep" "$op_name"
+		run_op "$dep" "$op_name" "$targets"
 	done
 
-	# Lauch the op on each target server
-	targets=${ops_targets[$op_id]:-localhost}
-	# uniq
-	targets=$(tr ' ' '\n' <<< ${targets} | sort -u | tr '\n' ' ')
-
+	# Run the code on each target
 	for target in ${targets}; do
 		code=${ops_code[$op_id]:-unset}
 		if [ "$code" = "unset" ]; then
@@ -120,7 +133,7 @@ run_op() {
 		if ((debug == 1)); then
 			info "$op_name" ssh $target ${code}
 		else
-			ssh $target ${code} &
+			(echo "$code" | ssh -T $target '${SHELL:-/bin/sh}') &
 			if ((mono == 1)); then
 				wait $! || die "op $op_name failed"
 			else
@@ -164,7 +177,7 @@ needs() {
 
 code() {
 	local var line
-	while read -r line; do var+=$line; done
+	while read -r line; do var+="$line\n"; done
 	ops_code[$last_op]="$var"
 }
 
