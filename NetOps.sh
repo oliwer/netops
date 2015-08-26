@@ -1,5 +1,3 @@
-#!/usr/bin/env mksh
-
 #
 # NetOps - Shell micro-framework for automated deployments over SSH
 #
@@ -22,7 +20,7 @@
 # of said person’s immediate fault when using the work as intended.
 
 set -eu
-PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
+PATH=/bin:/usr/bin:/usr/local/bin
 
 usage() {
 	echo "usage: ${0##*/} [-d] [-m] [-h] [-v] <rule_name>"
@@ -35,7 +33,7 @@ usage() {
 }
 
 version() {
-	echo "NetOps v0.01"
+	echo "NetOps v0.02"
 	exit $1
 }
 
@@ -130,11 +128,19 @@ run_op() {
 			continue
 		fi
 
-		if ((debug == 1)); then
-			info "$op_name" ssh $target "$code"
+		if ((debug)); then
+			if [ "$target" = "localhost" ]; then
+				info "$op_name: $code"
+			else
+				info "$op_name: ssh $target $code"
+			fi
 		else
-			(echo "$code" | ssh -T $target '${SHELL:-/bin/sh}') &
-			if ((mono == 1)); then
+			if [ "$target" = "localhost" ]; then
+				(echo -e "$code" | ${SHELL:-/bin/sh}) &
+			else
+				(echo -e "$code" | ssh -T $target '${SHELL:-/bin/sh}') &
+			fi
+			if ((mono)); then
 				wait $! || die "op $op_name failed"
 			else
 				jobs="$jobs $!"
